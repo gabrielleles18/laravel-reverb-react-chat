@@ -1,0 +1,83 @@
+version: "3.7"
+
+services:
+    # image project
+    app:
+        container_name: react-chat
+        build:
+            context: .
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        working_dir: /var/www/
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - redis
+        networks:
+            - laravel
+
+    # nginx
+    nginx:
+        container_name: react-chat-nginx
+        image: nginx:alpine
+        restart: unless-stopped
+        ports:
+            - "8985:80"
+        volumes:
+            - ./:/var/www
+            - ./docker/nginx/:/etc/nginx/conf.d/
+        networks:
+            - laravel
+
+    # db mysql
+    db:
+        container_name: react-chat-db
+        image: mysql:5.7.22
+        platform: linux/x86_64
+        restart: unless-stopped
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:-laravel}
+            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+            MYSQL_PASSWORD: ${DB_PASSWORD:-pass}
+            MYSQL_USER: ${DB_USERNAME:-user}
+        volumes:
+            - ./.docker/mysql/dbdata:/var/lib/mysql
+        ports:
+            - "3385:3306"
+        networks:
+            - laravel
+    phpmyadmin:
+        container_name: react-chat-phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        restart: unless-stopped
+        environment:
+            PMA_HOST: db
+            PMA_PORT: 3306
+        ports:
+            - "8085:80"
+        networks:
+            - laravel
+    # queue
+    queue:
+        container_name: react-chat-queue
+        image: bitnami/laravel:11
+        restart: unless-stopped
+        command: "php artisan queue:work"
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - redis
+            - app
+        networks:
+            - laravel
+
+    # redis
+    redis:
+        container_name: react-chat-redis
+        image: redis:latest
+        networks:
+            - laravel
+
+networks:
+    laravel:
+        driver: bridge
